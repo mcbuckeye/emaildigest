@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ digest.name }} - {{ current_date.strftime('%Y-%m-%d') }}</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+        <h1 style="margin: 0; font-size: 28px;">{{ digest.name }}</h1>
+        {% if digest.description %}
+        <p style="margin: 10px 0 0 0; opacity: 0.9; font-size: 14px;">{{ digest.description }}</p>
+        {% endif %}
+    </div>
+
+    <div style="background: #f8f9fa; padding: 20px; border-bottom: 3px solid #667eea;">
+        <p style="margin: 0; color: #666; font-size: 12px;">
+            Delivered on {{ current_date.strftime('%B %d, %Y at %I:%M %p') }}
+        </p>
+    </div>
+
+    <div>
+        {% if items %}
+            {% for item in items %}
+            <div style="padding: 20px; border-bottom: 1px solid #e0e0e0;">
+                <h2 style="margin: 0 0 10px 0; font-size: 18px; color: #333;">
+                    <a href="{{ item.link or item.source_url }}" style="color: #667eea; text-decoration: none;">{{ item.title }}</a>
+                </h2>
+                {% if item.summary %}
+                <p style="margin: 0; color: #666; font-size: 14px;">{{ item.summary[:200] }}{% if item.summary|length > 200 %}...{% endif %}</p>
+                {% endif %}
+                <p style="margin: 10px 0 0 0; font-size: 11px; color: #999;">
+                    {% if item.published %}
+                        Published: {{ item.published.strftime('%B %d, %Y') }}
+                    {% else %}
+                        From: {{ item.source_url[:50] }}{% if item.source_url|length > 50 %}...{% endif %}
+                    {% endif %}
+                </p>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div style="padding: 40px; text-align: center;">
+                <p style="color: #999; font-size: 14px;">No new items to report this week.</p>
+            </div>
+        {% endif %}
+    </div>
+
+    <div style="background: #f8f9fa; padding: 20px; text-align: center; border-radius: 0 0 10px 10px;">
+        <p style="margin: 0 0 10px 0; color: #999; font-size: 11px;">
+            You received this email because you subscribed to a digest.
+        </p>
+        <p style="margin: 0; color: #999; font-size: 11px;">
+            <a href="https://emaildigest.machomelab.com/unsubscribe" style="color: #667eea;">Unsubscribe</a> | 
+            <a href="https://emaildigest.machomelab.com" style="color: #667eea;">Manage digests</a>
+        </p>
+    </div>
+</body>
+</html>

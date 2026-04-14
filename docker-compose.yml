@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database
+  db:
+    image: postgres:16-alpine
+    container_name: emaildigest-db
+    environment:
+      POSTGRES_USER: emaildigest
+      POSTGRES_PASSWORD: emaildigest
+      POSTGRES_DB: emaildigest
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U emaildigest"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis (Celery broker)
+  redis:
+    image: redis:7-alpine
+    container_name: emaildigest-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Backend API (FastAPI)
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: emaildigest-backend
+    env_file:
+      - .env.example
+    environment:
+      DATABASE_URL: postgresql+asyncpg://emaildigest:emaildigest@db:5432/emaildigest
+      REDIS_URL: redis://redis:6379/0
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Celery Worker
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: emaildigest-worker
+    env_file:
+      - .env.example
+    environment:
+      DATABASE_URL: postgresql+asyncpg://emaildigest:emaildigest@db:5432/emaildigest
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    command: celery -A celery_worker worker --loglevel=info --concurrency=2
+
+  # Frontend (React)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../Dockerfile.frontend
+    container_name: emaildigest-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    environment:
+      REACT_APP_API_URL: http://backend:8000
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  default:
+    name: emaildigest-network
