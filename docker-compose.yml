@@ -1,95 +1,111 @@
-version: '3.8'
-
 services:
-  # PostgreSQL database
-  db:
+  emaildigest-postgres:
     image: postgres:16-alpine
-    container_name: emaildigest-db
+    restart: unless-stopped
     environment:
       POSTGRES_USER: emaildigest
       POSTGRES_PASSWORD: emaildigest
       POSTGRES_DB: emaildigest
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+      - emaildigest-pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U emaildigest"]
-      interval: 5s
+      test: ["CMD-SHELL", "pg_isready -U emaildigest -d emaildigest"]
+      interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+    networks:
+      - dokploy-network
 
-  # Redis (Celery broker)
-  redis:
+  emaildigest-redis:
     image: redis:7-alpine
-    container_name: emaildigest-redis
-    ports:
-      - "6379:6379"
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - emaildigest-redisdata:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
+      interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+    networks:
+      - dokploy-network
 
-  # Backend API (FastAPI)
-  backend:
+  emaildigest-backend:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: emaildigest-backend
+    restart: unless-stopped
     env_file:
       - .env.example
     environment:
-      DATABASE_URL: postgresql+asyncpg://emaildigest:emaildigest@db:5432/emaildigest
-      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql+asyncpg://emaildigest:emaildigest@emaildigest-postgres:5432/emaildigest
+      REDIS_URL: redis://emaildigest-redis:6379/0
       APP_HOST: 0.0.0.0
       APP_PORT: 8000
-    ports:
-      - "8000:8000"
+      APP_DEBUG: false
+      SMTP2GO_API_KEY: ${SMTP_PASS}
+      SMTP2GO_FROM_EMAIL: ${SMTP_FROM}
+      SMTP2GO_FROM_NAME: EmailDigest
+      SECRET_KEY: ${SECRET_KEY:-change-this-in-dokploy}
     depends_on:
-      db:
+      emaildigest-postgres:
         condition: service_healthy
-      redis:
+      emaildigest-redis:
         condition: service_healthy
-    command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000
+    networks:
+      - dokploy-network
 
-  # Celery Worker
-  worker:
+  emaildigest-worker:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: emaildigest-worker
+    restart: unless-stopped
     env_file:
       - .env.example
     environment:
-      DATABASE_URL: postgresql+asyncpg://emaildigest:emaildigest@db:5432/emaildigest
-      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql+asyncpg://emaildigest:emaildigest@emaildigest-postgres:5432/emaildigest
+      REDIS_URL: redis://emaildigest-redis:6379/0
+      SMTP2GO_API_KEY: ${SMTP_PASS}
+      SMTP2GO_FROM_EMAIL: ${SMTP_FROM}
+      SMTP2GO_FROM_NAME: EmailDigest
+      SECRET_KEY: ${SECRET_KEY:-change-this-in-dokploy}
     depends_on:
-      db:
+      emaildigest-postgres:
         condition: service_healthy
-      redis:
+      emaildigest-redis:
         condition: service_healthy
-      backend:
-        condition: service_started
+      emaildigest-backend:
+        condition: service_healthy
     command: celery -A celery_worker worker --loglevel=info --concurrency=2
+    networks:
+      - dokploy-network
 
-  # Frontend (React)
-  frontend:
+  emaildigest-frontend:
     build:
       context: ./frontend
       dockerfile: ../Dockerfile.frontend
-    container_name: emaildigest-frontend
+    restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3050:3000"
     depends_on:
-      - backend
+      - emaildigest-backend
     environment:
-      REACT_APP_API_URL: http://backend:8000
+      REACT_APP_API_URL: http://emaildigest-backend:8000
+    networks:
+      - dokploy-network
 
 volumes:
-  postgres_data:
-    driver: local
+  emaildigest-pgdata:
+    name: emaildigest-pgdata
+  emaildigest-redisdata:
+    name: emaildigest-redisdata
 
 networks:
-  default:
-    name: emaildigest-network
+  dokploy-network:
+    external: true
