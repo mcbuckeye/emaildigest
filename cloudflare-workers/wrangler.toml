@@ -1,0 +1,17 @@
+[vars]
+BACKEND_URL = "http://backend:8000"
+FRONTEND_URL = "http://frontend:3000"
+
+# If using Cloudflare Pages, uncomment the following:
+# [page]
+deploy_command = "npm run build"
+working_directory = "frontend"
+
+# If using Workers, uncomment the following:
+# [build]
+cmd = "wrangler dev"
+watch_dir = ["src"]
+
+# For production deployment via Dokploy proxy or direct routing
+# The actual routing will be configured in Cloudflare Dashboard
+# This file is a template for reference
