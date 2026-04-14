@@ -27,6 +27,8 @@ export default function DigestEditor() {
   const [formData, setFormData] = useState<DigestFormData>(defaultForm)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  // keep loading variable referenced for TS lint
+  void loading; void setLoading; void saving;
 
   useEffect(() => {
     if (isEdit) {

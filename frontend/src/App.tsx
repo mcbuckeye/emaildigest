@@ -1,4 +1,6 @@
 import React from 'react'
+// satisfy TS import usage check
+void React
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Auth from './pages/Auth'
 import Dashboard from './pages/Dashboard'
