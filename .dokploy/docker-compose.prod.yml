@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  # Backend API - Production with optimized settings
+  backend:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: emaildigest-backend:latest
+    container_name: emaildigest-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://emaildigest:emaildigest@db:5432/emaildigest
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY}
+      - SMTP2GO_API_KEY=${SMTP2GO_API_KEY}
+      - LLM_API_KEY=${LLM_API_KEY}
+      - APP_DEBUG=false
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - emaildigest-network
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --workers 4
+
+  # Celery Worker - Production
+  worker:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: emaildigest-backend:latest
+    container_name: emaildigest-worker
+    restart: unless-stopped
+    command: celery -A celery_worker worker --loglevel=info --concurrency=4 --pool=solo
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://emaildigest:emaildigest@db:5432/emaildigest
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY}
+    depends_on:
+      - backend
+    networks:
+      - emaildigest-network
+
+  # Frontend - Production build
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: ../../Dockerfile.frontend
+    image: emaildigest-frontend:latest
+    container_name: emaildigest-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - emaildigest-network
+    command: npm run dev
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  emaildigest-network:
+    driver: bridge

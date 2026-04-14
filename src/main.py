@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from src.config import config
 from src.models.base import Base
@@ -42,6 +43,27 @@ def create_app() -> FastAPI:
     # Include routers
     app.include_router(auth.router)
     app.include_router(digests.router)
+
+    # Health check endpoints for Dokploy
+    @app.get("/health")
+    async def health_check():
+        """Basic health check endpoint."""
+        return {"status": "healthy", "service": "emaildigest-backend"}
+
+    @app.get("/health/db")
+    async def health_check_db():
+        """Database connectivity health check."""
+        try:
+            async with db_session() as session:
+                # Simple query to verify DB connection
+                async with session.begin():
+                    pass
+            return {"status": "healthy", "database": "connected"}
+        except Exception as e:
+            return JSONResponse(
+                status_code=503,
+                content={"status": "unhealthy", "database": "error", "error": str(e)}
+            )
 
     return app
 

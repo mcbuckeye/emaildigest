@@ -1,0 +1,88 @@
+# Dokploy configuration for EmailDigest
+# Deploy to: https://emaildigest.machomelab.com
+
+services:
+  # Backend API
+  backend:
+    image: emaildigest-backend:latest
+    container_name: emaildigest-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://emaildigest:emaildigest@db:5432/emaildigest
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY}
+      - SMTP2GO_API_KEY=${SMTP2GO_API_KEY}
+      - LLM_API_KEY=${LLM_API_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - emaildigest-network
+
+  # Celery Worker
+  worker:
+    image: emaildigest-backend:latest
+    container_name: emaildigest-worker
+    restart: unless-stopped
+    command: celery -A celery_worker worker --loglevel=info --concurrency=2
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://emaildigest:emaildigest@db:5432/emaildigest
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY}
+    depends_on:
+      - backend
+    networks:
+      - emaildigest-network
+
+  # Frontend
+  frontend:
+    image: emaildigest-frontend:latest
+    container_name: emaildigest-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - emaildigest-network
+
+  # PostgreSQL
+  db:
+    image: postgres:16-alpine
+    container_name: emaildigest-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: emaildigest
+      POSTGRES_PASSWORD: emaildigest
+      POSTGRES_DB: emaildigest
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U emaildigest"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - emaildigest-network
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: emaildigest-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - emaildigest-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  emaildigest-network:
+    driver: bridge

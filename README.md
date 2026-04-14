@@ -60,9 +60,40 @@ See `.env.example` for required configuration.
 - `PATCH /api/digests/{id}` - Update digest
 - `DELETE /api/digests/{id}` - Delete digest
 
-## Deployment
+### Health
+- `GET /health` - Basic health check
+- `GET /health/db` - Database connectivity check
 
-Deploy to Dokploy. The app is containerized and ready for production.
+## Deployment to Dokploy
+
+1. **Push to GitHub** (already done):
+   ```bash
+   cd emaildigest
+   git add -A
+   git commit -m "Production-ready deployment"
+   git push
+   ```
+
+2. **In Dokploy dashboard**:
+   - Create new app from GitHub repository: `mcbuckeye/emaildigest`
+   - Select branch: `main`
+   - Set environment variables:
+     - `SECRET_KEY` - JWT secret key
+     - `SMTP2GO_API_KEY` - Your smtp2go API key
+     - `LLM_API_KEY` - AI model API key (for future features)
+   - Deploy
+
+3. **Or use the pre-configured files**:
+   - Copy `.dokploy/docker-compose.prod.yml` and `.dokploy/production.env`
+   - Adjust paths and credentials as needed
+   - Deploy using Dokploy CLI:
+     ```bash
+     dokploy deploy --file .dokploy/docker-compose.prod.yml
+     ```
+
+4. **Custom domain**:
+   - Point CNAME `emaildigest.machomelab.com` to your Dokploy instance
+   - Configure SSL certificate in Dokploy
 
 ## Architecture
 
