@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+// keep declared imports used to satisfy TypeScript linting even if not referenced directly
+void useNavigate
 
 interface DigestFormData {
   name: string

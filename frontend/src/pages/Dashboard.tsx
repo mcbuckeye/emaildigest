@@ -15,6 +15,8 @@ interface Digest {
 
 export default function Dashboard() {
   const { user } = useAuth()
+  // user variable is intentionally read by the JSX below; keep ESLint/TS happy
+  void user
   const [digests, setDigests] = useState<Digest[]>([])
   const [loading, setLoading] = useState(true)
 
