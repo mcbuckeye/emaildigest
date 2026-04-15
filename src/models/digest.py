@@ -99,6 +99,7 @@ class DigestItem(Base):
     __tablename__ = "digest_items"
 
     delivery_id: Mapped[int] = mapped_column(ForeignKey("digest_deliveries.id", ondelete="CASCADE"))
+    source_id: Mapped[int] = mapped_column(ForeignKey("digest_sources.id", ondelete="CASCADE"))
     source_url: Mapped[str] = mapped_column(String(500))
     title: Mapped[str] = mapped_column(String(500))
     summary: Mapped[str] = mapped_column(Text, nullable=True)
@@ -109,7 +110,6 @@ class DigestItem(Base):
     delivery: Mapped["DigestDelivery"] = relationship(back_populates="items")
     source: Mapped["DigestSource"] = relationship(
         back_populates="items",
-        cascade="all, delete-orphan",
     )
 
 
