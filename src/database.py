@@ -1,30 +1,27 @@
 """Database connection and sessions."""
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 from src.config import config
 
 
-def create_db_engine() -> async_sessionmaker[AsyncSession]:
-    """Create async database engine and session factory."""
-    engine = create_async_engine(
-        config().database_url,
-        echo=config().app_debug,
-        future=True,
-    )
-    return async_sessionmaker(
-        engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-    )
+# Create one shared async engine and session factory
+engine: AsyncEngine = create_async_engine(
+    config().database_url,
+    echo=config().app_debug,
+    future=True,
+)
+
+db_session = async_sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+)
 
 
-def get_db_session() -> async_sessionmaker[AsyncSession]:
-    """Get the session factory."""
-    return create_db_engine()
-
-
-db_session = get_db_session()
+def create_db_engine() -> AsyncEngine:
+    """Return the shared async engine."""
+    return engine
 
 
 async def get_db() -> AsyncSession:
