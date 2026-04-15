@@ -5,7 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from pydantic import EmailStr
+from pydantic import BaseModel, EmailStr
 
 from src.auth import create_access_token
 from src.database import db_session
@@ -16,6 +16,11 @@ from src.config import config
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+
+
+class SignupIn(BaseModel):
+    email: EmailStr
+    password: str
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
@@ -50,8 +55,10 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
 
 
 @router.post("/signup", status_code=status.HTTP_201_CREATED)
-async def signup(email: EmailStr, password: str):
-    """Register a new user."""
+async def signup(payload: SignupIn):
+    """Register a new user (accepts JSON body)."""
+    email = payload.email
+    password = payload.password
     async with db_session() as session:
         existing = await session.get(User, email)
         if existing:
