@@ -15,10 +15,8 @@ from src.routers import auth, digests
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
-    # Startup: create database tables
-    session_factory = create_db_engine()
-    async with session_factory.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Startup: skip automatic schema creation in production-style runtime.
+    # Dokploy deployments should rely on an explicit migration/init step, not create_all on every boot.
     yield
     # Shutdown: close database connections
 
