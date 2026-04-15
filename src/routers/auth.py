@@ -56,7 +56,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
 
 
 @router.post("/signup", status_code=status.HTTP_201_CREATED, response_model=None)
-async def signup(payload: SignupIn | None = None, request: Request | None = None):
+async def signup(payload: SignupIn = None, request: Request = None):
     """Register a new user (accepts JSON body). If payload parsing fails, attempt a manual JSON parse as a fallback."""
     # Allow Pydantic parsing to work; if it doesn't, try reading raw JSON from request
     if payload is None:
