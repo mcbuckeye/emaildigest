@@ -3,7 +3,7 @@
 from datetime import timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
@@ -56,10 +56,22 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
 
 
 @router.post("/signup", status_code=status.HTTP_201_CREATED)
-async def signup(payload: SignupIn):
-    """Register a new user (accepts JSON body)."""
-    email = payload.email
-    password = payload.password
+async def signup(payload: SignupIn | None = None, request: Request | None = None):
+    """Register a new user (accepts JSON body). If payload parsing fails, attempt a manual JSON parse as a fallback."""
+    # Allow Pydantic parsing to work; if it doesn't, try reading raw JSON from request
+    if payload is None:
+        if request is None:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid payload")
+        try:
+            data = await request.json()
+            email = data.get("email")
+            password = data.get("password")
+        except Exception:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid JSON payload")
+    else:
+        email = payload.email
+        password = payload.password
+
     async with db_session() as session:
         res = await session.execute(select(User).filter_by(email=email))
         existing = res.scalar_one_or_none()
