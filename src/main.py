@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 
 from src.config import config
 from src.models.base import Base
-from src.database import db_session
+from src.database import db_session, create_db_engine
 from src.routers import auth, digests
 
 
@@ -16,8 +16,9 @@ from src.routers import auth, digests
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
     # Startup: create database tables
-    async with db_session() as session:
-        await session.run_sync(Base.metadata.create_all)
+    session_factory = create_db_engine()
+    async with session_factory.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     yield
     # Shutdown: close database connections
 
