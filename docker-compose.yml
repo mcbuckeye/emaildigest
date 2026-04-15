@@ -92,11 +92,9 @@ services:
       dockerfile: ../Dockerfile.frontend
     restart: unless-stopped
     ports:
-      - "3050:3000"
+      - "3050:80"
     depends_on:
       - emaildigest-backend
-    environment:
-      REACT_APP_API_URL: http://emaildigest-backend:8000
     networks:
       - dokploy-network
 

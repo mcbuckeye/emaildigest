@@ -3,11 +3,10 @@
 import asyncio
 import logging
 from datetime import datetime
-from http.client import HTTPException
 from typing import Any
 
 import aiosmtplib
-from celery import current_task
+from celery import shared_task
 from jinja2 import Environment, FileSystemLoader
 
 from src.config import config
@@ -104,7 +103,7 @@ async def send_email(html_body: str, plain_text: str, to_email: str):
     )
 
 
-@current_task.bind
+@shared_task
 def generate_digest_task(digest_id: int):
     """Generate and send a digest."""
     async def run_task():
