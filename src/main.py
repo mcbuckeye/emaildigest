@@ -45,6 +45,7 @@ def create_app() -> FastAPI:
 
     # Health check endpoints for Dokploy
     @app.get("/health")
+    @app.get("/api/health")
     async def health_check():
         """Basic health check endpoint."""
         return {"status": "healthy", "service": "emaildigest-backend"}
