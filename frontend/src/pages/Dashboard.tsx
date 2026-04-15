@@ -27,7 +27,7 @@ export default function Dashboard() {
   const fetchDigests = async () => {
     const token = localStorage.getItem('token')
     try {
-      const res = await fetch('http://localhost:8000/api/digests/', {
+      const res = await fetch('/api/digests/', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -56,7 +56,7 @@ export default function Dashboard() {
   const handleDelete = async (id: number) => {
     if (!confirm('Are you sure you want to delete this digest?')) return
     const token = localStorage.getItem('token')
-    const res = await fetch(`http://localhost:8000/api/digests/${id}`, {
+    const res = await fetch(`/api/digests/${id}`, {
       method: 'DELETE',
       headers: {
         'Authorization': `Bearer ${token}`,

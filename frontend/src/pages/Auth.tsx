@@ -24,7 +24,7 @@ export default function Auth({ mode }: AuthProps) {
         ? { username: formData.email, password: formData.password }
         : { email: formData.email, password: formData.password }
 
-      const res = await fetch(`http://localhost:8000${endpoint}`, {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

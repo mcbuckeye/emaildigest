@@ -23,7 +23,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const token = localStorage.getItem('token')
     if (token) {
       // Validate token by calling /me endpoint
-      fetch('http://localhost:8000/api/auth/me', {
+      fetch('/api/auth/me', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',

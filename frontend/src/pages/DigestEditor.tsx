@@ -39,7 +39,7 @@ export default function DigestEditor() {
   const fetchDigest = async () => {
     const token = localStorage.getItem('token')
     try {
-      const res = await fetch(`http://localhost:8000/api/digests/${id}`, {
+      const res = await fetch(`/api/digests/${id}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -67,8 +67,8 @@ export default function DigestEditor() {
 
     const token = localStorage.getItem('token')
     const url = isEdit 
-      ? `http://localhost:8000/api/digests/${id}`
-      : 'http://localhost:8000/api/digests/'
+      ? `/api/digests/${id}`
+      : '/api/digests/'
     
     const method = isEdit ? 'PATCH' : 'POST'
 
