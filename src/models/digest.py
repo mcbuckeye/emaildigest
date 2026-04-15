@@ -117,6 +117,7 @@ class DigestItem(Base):
 from src.models.user import User
 
 User.digests: Mapped[list["Digest"]] = relationship(
+    "Digest",
     back_populates="owner",
 )
 
