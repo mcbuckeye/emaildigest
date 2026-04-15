@@ -20,14 +20,14 @@ export default function Auth({ mode }: AuthProps) {
 
     try {
       const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/signup'
-      const body = mode === 'login' 
-        ? { username: formData.email, password: formData.password }
-        : { email: formData.email, password: formData.password }
-
       const res = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        headers: mode === 'login'
+          ? { 'Content-Type': 'application/x-www-form-urlencoded' }
+          : { 'Content-Type': 'application/json' },
+        body: mode === 'login'
+          ? new URLSearchParams({ username: formData.email, password: formData.password }).toString()
+          : JSON.stringify({ email: formData.email, password: formData.password }),
       })
 
       if (!res.ok) {
