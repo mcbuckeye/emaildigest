@@ -6,6 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
+from sqlalchemy import select
 
 from src.auth import create_access_token
 from src.database import db_session
@@ -60,7 +61,8 @@ async def signup(payload: SignupIn):
     email = payload.email
     password = payload.password
     async with db_session() as session:
-        existing = await session.get(User, email)
+        res = await session.execute(select(User).filter_by(email=email))
+        existing = res.scalar_one_or_none()
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -91,7 +93,8 @@ async def signup(payload: SignupIn):
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     """Login and return access token."""
     async with db_session() as session:
-        user = await session.get(User, form_data.username)
+        res = await session.execute(select(User).filter_by(email=form_data.username))
+        user = res.scalar_one_or_none()
         if user is None or not user.verify_password(form_data.password):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
