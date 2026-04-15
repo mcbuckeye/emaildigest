@@ -57,40 +57,36 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
 
 
 @router.post("/signup", status_code=status.HTTP_201_CREATED, response_model=None)
-async def signup(payload: SignupIn = None, request: Request = None):
-    """Register a new user (accepts JSON body). If payload parsing fails, attempt a manual JSON parse as a fallback."""
-    # Allow Pydantic parsing to work; if it doesn't, try reading raw JSON/form from request
-    if payload is None:
-        if request is None:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid payload")
-        # Try JSON body
+async def signup(request: Request):
+    """Register a new user (manual parsing to be robust against malformed clients)."""
+    # Try JSON first
+    data = None
+    try:
+        data = await request.json()
+    except Exception:
         data = None
+    # Try form data
+    if not data:
         try:
-            data = await request.json()
+            form = await request.form()
+            data = {k: v for k, v in form.items()}
         except Exception:
             data = None
-        # Try form body
-        if not data:
-            try:
-                form = await request.form()
-                data = {k: v for k, v in form.items()}
-            except Exception:
-                data = None
-        # Try raw body decode
-        if not data:
-            try:
-                raw = await request.body()
-                if raw:
-                    data = json.loads(raw.decode())
-            except Exception:
-                data = None
-        if not data:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid request payload")
-        email = data.get("email")
-        password = data.get("password")
-    else:
-        email = payload.email
-        password = payload.password
+    # Try raw body
+    if not data:
+        try:
+            raw = await request.body()
+            if raw:
+                data = json.loads(raw.decode())
+        except Exception:
+            data = None
+    if not data:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid request payload")
+
+    email = data.get("email")
+    password = data.get("password")
+    if not email or not password:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Missing email or password")
 
     async with db_session() as session:
         res = await session.execute(select(User).filter_by(email=email))
