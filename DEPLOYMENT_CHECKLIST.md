@@ -2,142 +2,89 @@
 
 ## Pre-Deployment
 
-- [ ] All code committed to GitHub
-- [ ] `.env.example` contains all required variables
-- [ ] `pyproject.toml` has all dependencies
-- [ ] Dockerfiles are present and correct
-- [ ] `docker-compose.yml` is properly configured
+- [ ] All code committed and CI green
+- [ ] `.env.example` reflects the current env shape
+- [ ] Alembic migrations present under `alembic/versions/`
+- [ ] Dockerfiles and `docker-compose.yml` include: backend, worker, beat, migrate, frontend, db, redis
 
 ## Dokploy Deployment
 
 ### 1. Create Application
 
-- [ ] Log into Dokploy dashboard
-- [ ] Click "Create Application"
-- [ ] Select "Connect to Git"
-- [ ] Choose repository: `mcbuckeye/emaildigest`
-- [ ] Select branch: `main`
+- [ ] Log into Dokploy, "Create Application"
+- [ ] Connect to Git: `mcbuckeye/emaildigest`, branch `main`
 
 ### 2. Configure Environment
 
-- [ ] Set `DATABASE_URL`
-- [ ] Set `REDIS_URL`
-- [ ] Set `SECRET_KEY` (generate a strong random value)
-- [ ] Set `SMTP2GO_API_KEY`
-- [ ] Set `LLM_API_KEY`
-- [ ] Set `APP_DEBUG=false`
-- [ ] Set `APP_HOST=0.0.0.0`
-- [ ] Set `APP_PORT=8000`
+Required:
+- [ ] `DATABASE_URL`
+- [ ] `REDIS_URL`
+- [ ] `SECRET_KEY` (strong random value — app refuses to boot with the default in production)
+- [ ] `APP_ENV=production`
+- [ ] `APP_BASE_URL=https://emaildigest.machomelab.com`
+- [ ] `CORS_ORIGINS=https://emaildigest.machomelab.com`
+- [ ] `SMTP2GO_API_KEY`
+- [ ] `OPENAI_API_KEY`
+- [ ] `SMTP2GO_FROM_EMAIL`, `SMTP2GO_FROM_NAME`
+
+Optional rate limits (override if abuse appears):
+- [ ] `RATE_LIMIT_SIGNUP`, `RATE_LIMIT_LOGIN`, `RATE_LIMIT_AI_CHAT`
 
 ### 3. Configure Domain
 
-- [ ] Add custom domain: `emaildigest.machomelab.com`
-- [ ] Enable SSL/HTTPS
-- [ ] Configure SSL provider (Cloudflare managed cert recommended)
+- [ ] Add `emaildigest.machomelab.com`
+- [ ] Enable SSL/HTTPS (Cloudflare managed cert recommended)
 
 ### 4. Deploy
 
-- [ ] Click "Deploy"
-- [ ] Wait for deployment to complete
-- [ ] Check deployment logs for errors
+- [ ] Run migrations (the `migrate` service applies `alembic upgrade head`; must complete before backend)
+- [ ] Start `backend`, `worker`, `beat`, `frontend`
+- [ ] Check logs for errors
+- [ ] `beat` service is required; without it, nothing gets delivered
 
 ## Cloudflare Configuration
 
-### DNS Setup
-
-- [ ] Log into Cloudflare
-- [ ] Navigate to `machomelab.com` DNS settings
-- [ ] Create CNAME record:
-  - Name: `emaildigest`
-  - Target: `<dokploy-deployment-url>`
-  - Proxy: Enabled (orange cloud)
-
-### Optional: Workers Setup
-
-- [ ] Create Cloudflare Worker for reverse proxy
-- [ ] Bind environment variables
-- [ ] Set routing rules
+- [ ] `emaildigest` CNAME → Dokploy host (proxied)
+- [ ] (Optional) Workers for reverse proxy
 
 ## Verification
 
 ### Health Checks
 
 ```bash
-# Backend API
 curl https://emaildigest.machomelab.com/health
-
-# Database connection
+curl https://emaildigest.machomelab.com/health/ready
 curl https://emaildigest.machomelab.com/health/db
-
-# Frontend
-curl https://emaildigest.machomelab.com
 ```
 
-### Functional Tests
+### Smoke tests
 
-1. **Sign up test**
-   - [ ] Navigate to `https://emaildigest.machomelab.com/signup`
-   - [ ] Create a new account
-   - [ ] Verify email received (if SMTP configured)
-
-2. **Login test**
-   - [ ] Navigate to `https://emaildigest.machomelab.com/login`
-   - [ ] Login with credentials
-   - [ ] Verify redirect to dashboard
-
-3. **Create digest test**
-   - [ ] Click "Create New Digest"
-   - [ ] Fill in digest details
-   - [ ] Submit and verify digest created
-
-4. **View digests**
-   - [ ] Verify digest appears in dashboard
-   - [ ] Test edit/delete functionality
-
-## Post-Deployment
-
-### Monitoring
-
-- [ ] Set up Dokploy monitoring/alerts
-- [ ] Configure health check intervals
-- [ ] Set up log aggregation (optional)
+1. Sign up → /login
+2. AI assistant page → ask for "weekly AI news" → confirm proposed digest
+3. Dashboard → Pause / Resume / Resend
+4. Deliveries page → preview last delivery
+5. Log out → Forgot password → reset via emailed link
 
 ### Security
 
-- [ ] Change default `SECRET_KEY` to production value
-- [ ] Enable HTTPS only
-- [ ] Configure CORS properly
-- [ ] Set up rate limiting (if needed)
+- [ ] `SECRET_KEY` rotated from default
+- [ ] HTTPS only (HSTS header sent in prod)
+- [ ] CORS origins locked to production domain
+- [ ] Rate limits sane for your traffic profile
 
-### Documentation
+## Observability
 
-- [ ] Update team documentation
-- [ ] Document any custom configurations
-- [ ] Create runbook for common issues
+- [ ] Backend emits structured JSON logs (`structlog`)
+- [ ] Monitor Celery worker + beat uptime
+- [ ] (Optional) Connect Sentry by wiring `SENTRY_DSN` into `logging_conf.configure_logging`
 
-## Rollback Plan
+## Rollback
 
-If deployment fails:
-
-1. [ ] Revert to previous commit if needed
-2. [ ] Check Dokploy rollback options
-3. [ ] Review error logs
-4. [ ] Contact support if necessary
-
-## Troubleshooting Resources
-
-- Dokploy documentation: https://dokploy.com/docs
-- Cloudflare documentation: https://developers.cloudflare.com/
-- FastAPI documentation: https://fastapi.tiangolo.com/
-- Celery documentation: https://docs.celeryq.dev/
-
-## Emergency Contacts
-
-- Dokploy Support: https://dokploy.com/support
-- Cloudflare Support: https://www.cloudflare.com/support/
+1. Re-deploy previous image
+2. If migration needed rollback: `alembic downgrade -1` (check destructive-migration safety first)
 
 ---
 
-**Deployment Date:** __________  
-**Deployed By:** __________  
+**Deployment Date:** __________
+**Deployed By:** __________
 **Notes:** __________

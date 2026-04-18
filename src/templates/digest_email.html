@@ -24,14 +24,14 @@
             {% for item in items %}
             <div style="padding: 20px; border-bottom: 1px solid #e0e0e0;">
                 <h2 style="margin: 0 0 10px 0; font-size: 18px; color: #333;">
-                    <a href="{{ item.link or item.source_url }}" style="color: #667eea; text-decoration: none;">{{ item.title }}</a>
+                    <a href="{{ item.url or item.source_url }}" style="color: #667eea; text-decoration: none;">{{ item.title }}</a>
                 </h2>
                 {% if item.summary %}
-                <p style="margin: 0; color: #666; font-size: 14px;">{{ item.summary[:200] }}{% if item.summary|length > 200 %}...{% endif %}</p>
+                <div style="margin: 0; color: #666; font-size: 14px;">{{ item.summary | sanitize | safe }}</div>
                 {% endif %}
                 <p style="margin: 10px 0 0 0; font-size: 11px; color: #999;">
-                    {% if item.published %}
-                        Published: {{ item.published.strftime('%B %d, %Y') }}
+                    {% if item.published_at %}
+                        Published: {{ item.published_at.strftime('%B %d, %Y') }}
                     {% else %}
                         From: {{ item.source_url[:50] }}{% if item.source_url|length > 50 %}...{% endif %}
                     {% endif %}
@@ -40,17 +40,16 @@
             {% endfor %}
         {% else %}
             <div style="padding: 40px; text-align: center;">
-                <p style="color: #999; font-size: 14px;">No new items to report this week.</p>
+                <p style="color: #999; font-size: 14px;">No new items to report.</p>
             </div>
         {% endif %}
     </div>
 
     <div style="background: #f8f9fa; padding: 20px; text-align: center; border-radius: 0 0 10px 10px;">
         <p style="margin: 0 0 10px 0; color: #999; font-size: 11px;">
-            You received this email because you subscribed to a digest.
+            You received this email because you subscribed to {{ app_name }}.
         </p>
         <p style="margin: 0; color: #999; font-size: 11px;">
-            <a href="https://emaildigest.machomelab.com/unsubscribe" style="color: #667eea;">Unsubscribe</a> | 
             <a href="https://emaildigest.machomelab.com" style="color: #667eea;">Manage digests</a>
         </p>
     </div>

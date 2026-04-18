@@ -30,6 +30,22 @@ services:
     networks:
       - dokploy-network
 
+  emaildigest-migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: "no"
+    env_file:
+      - .env.example
+    environment:
+      DATABASE_URL: postgresql+asyncpg://emaildigest:emaildigest@emaildigest-postgres:5432/emaildigest
+    depends_on:
+      emaildigest-postgres:
+        condition: service_healthy
+    command: alembic upgrade head
+    networks:
+      - dokploy-network
+
   emaildigest-backend:
     build:
       context: .
@@ -42,18 +58,24 @@ services:
       REDIS_URL: redis://emaildigest-redis:6379/0
       APP_HOST: 0.0.0.0
       APP_PORT: 8000
+      APP_ENV: production
       APP_DEBUG: false
+      APP_BASE_URL: ${APP_BASE_URL:-https://emaildigest.machomelab.com}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://emaildigest.machomelab.com}
       SMTP2GO_API_KEY: ${SMTP_PASS}
       SMTP2GO_FROM_EMAIL: ${SMTP_FROM}
       SMTP2GO_FROM_NAME: EmailDigest
-      SECRET_KEY: ${SECRET_KEY:-change-this-in-dokploy}
+      SECRET_KEY: ${SECRET_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
     depends_on:
       emaildigest-postgres:
         condition: service_healthy
       emaildigest-redis:
         condition: service_healthy
+      emaildigest-migrate:
+        condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready')"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -71,18 +93,41 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://emaildigest:emaildigest@emaildigest-postgres:5432/emaildigest
       REDIS_URL: redis://emaildigest-redis:6379/0
+      APP_ENV: production
       SMTP2GO_API_KEY: ${SMTP_PASS}
       SMTP2GO_FROM_EMAIL: ${SMTP_FROM}
       SMTP2GO_FROM_NAME: EmailDigest
-      SECRET_KEY: ${SECRET_KEY:-change-this-in-dokploy}
+      SECRET_KEY: ${SECRET_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
     depends_on:
       emaildigest-postgres:
         condition: service_healthy
       emaildigest-redis:
         condition: service_healthy
-      emaildigest-backend:
-        condition: service_healthy
+      emaildigest-migrate:
+        condition: service_completed_successfully
     command: celery -A celery_worker worker --loglevel=info --concurrency=2
+    networks:
+      - dokploy-network
+
+  emaildigest-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env.example
+    environment:
+      DATABASE_URL: postgresql+asyncpg://emaildigest:emaildigest@emaildigest-postgres:5432/emaildigest
+      REDIS_URL: redis://emaildigest-redis:6379/0
+      APP_ENV: production
+      SECRET_KEY: ${SECRET_KEY}
+    depends_on:
+      emaildigest-redis:
+        condition: service_healthy
+      emaildigest-migrate:
+        condition: service_completed_successfully
+    command: celery -A celery_worker beat --loglevel=info
     networks:
       - dokploy-network
 

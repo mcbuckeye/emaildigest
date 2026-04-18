@@ -1,12 +1,20 @@
 """User model."""
 
-from datetime import datetime
+from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+from passlib.context import CryptContext
 from sqlalchemy import String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.database import db_session
 from src.models.base import Base
+
+if TYPE_CHECKING:
+    from src.models.digest import Digest, PasswordResetToken
+
+
+_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 class User(Base):
@@ -15,20 +23,21 @@ class User(Base):
     __tablename__ = "users"
 
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
-    password_hash: Mapped[str]
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)
+    password_hash: Mapped[str] = mapped_column(String(255))
+
+    digests: Mapped[list[Digest]] = relationship(
+        "Digest",
+        back_populates="owner",
+        cascade="all, delete-orphan",
+    )
+    password_reset_tokens: Mapped[list[PasswordResetToken]] = relationship(
+        "PasswordResetToken",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
     def set_password(self, password: str) -> None:
-        """Set password hash."""
-        from passlib.context import CryptContext
-
-        pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-        self.password_hash = pwd_context.hash(password)
+        self.password_hash = _pwd_context.hash(password)
 
     def verify_password(self, password: str) -> bool:
-        """Verify password against hash."""
-        from passlib.context import CryptContext
-
-        pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-        return pwd_context.verify(password, self.password_hash)
+        return _pwd_context.verify(password, self.password_hash)

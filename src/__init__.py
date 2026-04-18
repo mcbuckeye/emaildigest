@@ -1,0 +1,1 @@
+"""EmailDigest backend package."""

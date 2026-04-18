@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { api } from '../api'
 import { useAuth } from '../contexts/AuthContext'
 
 interface AuthProps {
@@ -7,7 +8,8 @@ interface AuthProps {
 }
 
 export default function Auth({ mode }: AuthProps) {
-  const [formData, setFormData] = useState({ email: '', password: '' })
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const { login } = useAuth()
@@ -17,29 +19,17 @@ export default function Auth({ mode }: AuthProps) {
     e.preventDefault()
     setLoading(true)
     setError('')
-
     try {
-      const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/signup'
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: mode === 'login'
-          ? { 'Content-Type': 'application/x-www-form-urlencoded' }
-          : { 'Content-Type': 'application/json' },
-        body: mode === 'login'
-          ? new URLSearchParams({ username: formData.email, password: formData.password }).toString()
-          : JSON.stringify({ email: formData.email, password: formData.password }),
-      })
-
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.detail || 'Authentication failed')
+      if (mode === 'signup') {
+        const res = await api.signup(email, password)
+        await login(res.token)
+      } else {
+        const res = await api.login(email, password)
+        await login(res.access_token)
       }
-
-      const data = await res.json()
-      login(data.access_token || data.token)
       navigate('/')
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Authentication failed')
     } finally {
       setLoading(false)
     }
@@ -51,49 +41,51 @@ export default function Auth({ mode }: AuthProps) {
         <h1>{mode === 'login' ? 'Welcome back' : 'Create your account'}</h1>
         <p>{mode === 'login' ? 'Sign in to your account' : 'Get started with EmailDigest'}</p>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} aria-label={mode}>
           <div className="input-group">
-            <label>Email</label>
+            <label htmlFor="email">Email</label>
             <input
+              id="email"
               type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               required
               placeholder="you@example.com"
             />
           </div>
-
           <div className="input-group">
-            <label>Password</label>
+            <label htmlFor="password">Password</label>
             <input
+              id="password"
               type="password"
-              value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               required
               placeholder="Min 8 characters"
+              minLength={8}
             />
           </div>
 
-          {error && (
-            <div style={{ color: 'red', marginBottom: '16px', fontSize: '14px' }}>
-              {error}
-            </div>
-          )}
+          {error && <div role="alert" style={{ color: 'red', marginBottom: '16px' }}>{error}</div>}
 
           <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={loading}>
             {loading ? 'Loading...' : mode === 'login' ? 'Sign In' : 'Create Account'}
           </button>
         </form>
 
-        <p style={{ marginTop: '24px', fontSize: '14px' }}>
+        <p style={{ marginTop: '16px', fontSize: '14px' }}>
           {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
-          <Link
-            to={mode === 'login' ? '/signup' : '/login'}
-            style={{ color: '#667eea', textDecoration: 'none' }}
-          >
+          <Link to={mode === 'login' ? '/signup' : '/login'} style={{ color: '#667eea' }}>
             {mode === 'login' ? 'Sign up' : 'Log in'}
           </Link>
         </p>
+        {mode === 'login' && (
+          <p style={{ marginTop: '8px', fontSize: '14px' }}>
+            <Link to="/forgot-password" style={{ color: '#667eea' }}>
+              Forgot your password?
+            </Link>
+          </p>
+        )}
       </div>
     </div>
   )
