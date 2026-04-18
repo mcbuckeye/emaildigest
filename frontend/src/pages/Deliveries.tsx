@@ -35,6 +35,8 @@ export default function Deliveries() {
                 <th style={{ textAlign: 'left' }}>When</th>
                 <th style={{ textAlign: 'left' }}>Status</th>
                 <th style={{ textAlign: 'left' }}>Items</th>
+                <th style={{ textAlign: 'left' }}>Opens</th>
+                <th style={{ textAlign: 'left' }}>Clicks</th>
                 <th></th>
               </tr>
             </thead>
@@ -44,6 +46,8 @@ export default function Deliveries() {
                   <td>{new Date(d.sent_at || d.scheduled_at).toLocaleString()}</td>
                   <td><span className={`status-badge status-${d.status}`}>{d.status}</span></td>
                   <td>{d.item_count}</td>
+                  <td>{d.open_count}</td>
+                  <td>{d.click_count}</td>
                   <td>
                     <Link to={`/deliveries/${d.id}/preview`} className="btn btn-secondary btn-sm">Preview</Link>
                   </td>

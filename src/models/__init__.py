@@ -6,9 +6,12 @@ from src.models.digest import (
     Digest,
     DigestDelivery,
     DigestItem,
+    DigestRecipient,
     DigestSource,
     DigestStatus,
+    EmailVerificationToken,
     PasswordResetToken,
+    SourceHealth,
     SourceType,
 )
 from src.models.user import User
@@ -18,10 +21,13 @@ __all__ = [
     "User",
     "Digest",
     "DigestSource",
+    "DigestRecipient",
     "DigestDelivery",
     "DigestItem",
     "DigestStatus",
     "DeliveryStatus",
     "SourceType",
+    "SourceHealth",
     "PasswordResetToken",
+    "EmailVerificationToken",
 ]

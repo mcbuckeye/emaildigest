@@ -53,6 +53,15 @@ Frontend:
 cd frontend && npm test && npm run typecheck && npm run build
 ```
 
+End-to-end (Playwright):
+
+```bash
+cd e2e && npm install
+npx playwright install chromium
+npm --prefix ../frontend run dev &    # or point E2E_BASE_URL at any running frontend
+npm test
+```
+
 ## API
 
 Auth
@@ -73,7 +82,26 @@ Digests
 - `GET /api/deliveries/{id}/preview` — rendered HTML email
 
 AI
-- `POST /api/ai/chat` — conversational digest builder with tool calls
+- `POST /api/ai/chat` — conversational digest builder with `web_search`, `validate_rss`, `propose_digest` tools
+- `POST /api/ai/chat/stream` — Server-Sent Events; streams tokens + tool calls + final proposal
+
+User settings
+- `POST /api/user/change-password`
+- `POST /api/user/change-email` (triggers re-verification)
+- `DELETE /api/user?confirm=DELETE`
+- `POST /api/auth/verify-email` / `POST /api/auth/resend-verification`
+
+Recipients & unsubscribe
+- `GET/POST /api/digests/{id}/recipients`, `DELETE /api/digests/{id}/recipients/{rec_id}`
+- `POST /api/unsubscribe/{token}` (public)
+
+Tracking
+- `GET /api/track/open/{token}.gif` — open pixel (1x1 gif)
+- `GET /api/track/click/{token}/{item_id}` — click redirect
+
+Observability
+- `GET /metrics` — Prometheus plaintext counters
+- Set `SENTRY_DSN` to enable exception reporting
 
 Health
 - `GET /health` — liveness

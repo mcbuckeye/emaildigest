@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from passlib.context import CryptContext
@@ -11,7 +12,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.models.base import Base
 
 if TYPE_CHECKING:
-    from src.models.digest import Digest, PasswordResetToken
+    from src.models.digest import Digest, EmailVerificationToken, PasswordResetToken
 
 
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -24,6 +25,7 @@ class User(Base):
 
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
+    email_verified_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
     digests: Mapped[list[Digest]] = relationship(
         "Digest",
@@ -32,6 +34,11 @@ class User(Base):
     )
     password_reset_tokens: Mapped[list[PasswordResetToken]] = relationship(
         "PasswordResetToken",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    email_verification_tokens: Mapped[list[EmailVerificationToken]] = relationship(
+        "EmailVerificationToken",
         back_populates="user",
         cascade="all, delete-orphan",
     )

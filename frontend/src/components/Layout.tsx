@@ -23,7 +23,8 @@ export default function Layout({ children }: LayoutProps) {
           </Link>
           <div className="nav-links">
             <Link to="/">Dashboard</Link>
-            <Link to="/digests/new">Create Digest</Link>
+            <Link to="/digests/assistant">AI Assistant</Link>
+            <Link to="/settings">Settings</Link>
             <span style={{ marginLeft: '24px', color: '#6b7280' }}>
               {user?.email}
             </span>

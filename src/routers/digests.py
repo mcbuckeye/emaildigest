@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import secrets
 from datetime import datetime
 from typing import Annotated
 
@@ -17,6 +18,7 @@ from src.database import get_db
 from src.models import (
     Digest,
     DigestDelivery,
+    DigestRecipient,
     DigestSource,
     DigestStatus,
     User,
@@ -67,6 +69,9 @@ class SourceOut(BaseModel):
     id: int
     source_type: str
     url: str
+    health: str = "healthy"
+    consecutive_failures: int = 0
+    last_error: str | None = None
 
 
 class DigestOut(BaseModel):
@@ -93,7 +98,17 @@ def _serialize(digest: Digest) -> DigestOut:
         recipient_email=digest.recipient_email,
         next_run_at=digest.next_run_at,
         last_run_at=digest.last_run_at,
-        sources=[SourceOut(id=s.id, source_type=s.source_type, url=s.url) for s in (digest.sources or [])],
+        sources=[
+            SourceOut(
+                id=s.id,
+                source_type=s.source_type,
+                url=s.url,
+                health=s.health,
+                consecutive_failures=s.consecutive_failures,
+                last_error=s.last_error,
+            )
+            for s in (digest.sources or [])
+        ],
         created_at=digest.created_at,
         updated_at=digest.updated_at,
     )
@@ -148,6 +163,12 @@ async def create_digest(
         digest.next_run_at = compute_next_run_at(payload.frequency_cron).replace(tzinfo=None)
     for source in payload.sources:
         digest.sources.append(DigestSource(source_type=source.source_type, url=source.url))
+    digest.recipients.append(
+        DigestRecipient(
+            email=payload.recipient_email,
+            unsubscribe_token=secrets.token_urlsafe(24),
+        )
+    )
     db.add(digest)
     await db.commit()
     await db.refresh(digest, attribute_names=["sources"])
@@ -234,6 +255,19 @@ class DeliveryOut(BaseModel):
     subject: str | None
     error_message: str | None
     item_count: int
+    open_count: int = 0
+    click_count: int = 0
+
+
+class RecipientIn(BaseModel):
+    email: EmailStr
+
+
+class RecipientOut(BaseModel):
+    id: int
+    email: str
+    unsubscribed_at: datetime | None
+    unsubscribe_token: str
 
 
 @router.get("/digests/{digest_id}/deliveries", response_model=list[DeliveryOut])
@@ -265,6 +299,8 @@ async def list_deliveries(
             subject=d.subject,
             error_message=d.error_message,
             item_count=len(d.items),
+            open_count=d.open_count,
+            click_count=d.click_count,
         )
         for d in rows
     ]
@@ -287,3 +323,91 @@ async def preview_delivery(
     if not delivery.html_body:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No preview available")
     return HTMLResponse(content=delivery.html_body)
+
+
+@router.get("/digests/{digest_id}/recipients", response_model=list[RecipientOut])
+async def list_recipients(
+    digest_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    await _load_owned(digest_id, current_user, db, load_sources=False)
+    stmt = select(DigestRecipient).where(DigestRecipient.digest_id == digest_id).order_by(DigestRecipient.id)
+    rows = (await db.execute(stmt)).scalars().all()
+    return [
+        RecipientOut(
+            id=r.id,
+            email=r.email,
+            unsubscribed_at=r.unsubscribed_at,
+            unsubscribe_token=r.unsubscribe_token,
+        )
+        for r in rows
+    ]
+
+
+@router.post("/digests/{digest_id}/recipients", status_code=status.HTTP_201_CREATED, response_model=RecipientOut)
+async def add_recipient(
+    digest_id: int,
+    payload: RecipientIn,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    await _load_owned(digest_id, current_user, db, load_sources=False)
+    existing = (
+        await db.execute(
+            select(DigestRecipient).where(
+                DigestRecipient.digest_id == digest_id,
+                DigestRecipient.email == payload.email,
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Recipient already exists")
+    rec = DigestRecipient(
+        digest_id=digest_id,
+        email=payload.email,
+        unsubscribe_token=secrets.token_urlsafe(24),
+    )
+    db.add(rec)
+    await db.commit()
+    await db.refresh(rec)
+    return RecipientOut(
+        id=rec.id,
+        email=rec.email,
+        unsubscribed_at=rec.unsubscribed_at,
+        unsubscribe_token=rec.unsubscribe_token,
+    )
+
+
+@router.delete("/digests/{digest_id}/recipients/{recipient_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_recipient(
+    digest_id: int,
+    recipient_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    await _load_owned(digest_id, current_user, db, load_sources=False)
+    rec = await db.get(DigestRecipient, recipient_id)
+    if rec is None or rec.digest_id != digest_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recipient not found")
+    await db.delete(rec)
+    await db.commit()
+
+
+public_router = APIRouter(prefix="/api", tags=["public"])
+
+
+@public_router.post("/unsubscribe/{token}")
+async def unsubscribe(
+    token: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    rec = (
+        await db.execute(select(DigestRecipient).where(DigestRecipient.unsubscribe_token == token))
+    ).scalar_one_or_none()
+    if rec is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown token")
+    if rec.unsubscribed_at is None:
+        rec.unsubscribed_at = datetime.utcnow()
+        await db.commit()
+    return {"detail": "Unsubscribed"}
