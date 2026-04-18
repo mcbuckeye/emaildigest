@@ -2,7 +2,19 @@
 # Deploy to: https://emaildigest.machomelab.com
 
 services:
-  # Backend API
+  migrate:
+    image: emaildigest-backend:latest
+    container_name: emaildigest-migrate
+    restart: "no"
+    command: alembic upgrade head
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://emaildigest:emaildigest@db:5432/emaildigest
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - emaildigest-network
+
   backend:
     image: emaildigest-backend:latest
     container_name: emaildigest-backend
@@ -12,10 +24,15 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://emaildigest:emaildigest@db:5432/emaildigest
       - REDIS_URL=redis://redis:6379/0
+      - APP_ENV=production
+      - APP_BASE_URL=${APP_BASE_URL}
+      - CORS_ORIGINS=${CORS_ORIGINS}
       - SECRET_KEY=${SECRET_KEY}
       - SMTP2GO_API_KEY=${SMTP2GO_API_KEY}
-      - LLM_API_KEY=${LLM_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       db:
         condition: service_healthy
       redis:
@@ -23,7 +40,6 @@ services:
     networks:
       - emaildigest-network
 
-  # Celery Worker
   worker:
     image: emaildigest-backend:latest
     container_name: emaildigest-worker
@@ -33,12 +49,29 @@ services:
       - DATABASE_URL=postgresql+asyncpg://emaildigest:emaildigest@db:5432/emaildigest
       - REDIS_URL=redis://redis:6379/0
       - SECRET_KEY=${SECRET_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - SMTP2GO_API_KEY=${SMTP2GO_API_KEY}
     depends_on:
-      - backend
+      migrate:
+        condition: service_completed_successfully
     networks:
       - emaildigest-network
 
-  # Frontend
+  beat:
+    image: emaildigest-backend:latest
+    container_name: emaildigest-beat
+    restart: unless-stopped
+    command: celery -A celery_worker beat --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://emaildigest:emaildigest@db:5432/emaildigest
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - emaildigest-network
+
   frontend:
     image: emaildigest-frontend:latest
     container_name: emaildigest-frontend
@@ -50,7 +83,6 @@ services:
     networks:
       - emaildigest-network
 
-  # PostgreSQL
   db:
     image: postgres:16-alpine
     container_name: emaildigest-db
@@ -69,11 +101,15 @@ services:
     networks:
       - emaildigest-network
 
-  # Redis
   redis:
     image: redis:7-alpine
     container_name: emaildigest-redis
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
     volumes:
       - redis_data:/data
     networks:

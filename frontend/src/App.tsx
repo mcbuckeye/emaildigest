@@ -1,50 +1,44 @@
-import React from 'react'
-// satisfy TS import usage check
-void React
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Auth from './pages/Auth'
 import Dashboard from './pages/Dashboard'
 import DigestEditor from './pages/DigestEditor'
 import Layout from './components/Layout'
+import AiAssistant from './pages/AiAssistant'
+import Deliveries, { DeliveryPreview } from './pages/Deliveries'
+import { PasswordResetRequest, PasswordResetConfirm } from './pages/PasswordReset'
 import { useAuth } from './contexts/AuthContext'
 
-function App() {
+function RequireAuth({ children }: { children: JSX.Element }) {
   const { user, loading } = useAuth()
+  if (loading) return <div className="loader" aria-label="loading" />
+  if (!user) return <Navigate to="/login" replace />
+  return children
+}
 
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
-        <div className="loader"></div>
-      </div>
-    )
-  }
-
+export default function App() {
   return (
     <Routes>
-      {/* Auth routes - no layout */}
       <Route path="/login" element={<Auth mode="login" />} />
       <Route path="/signup" element={<Auth mode="signup" />} />
-      
-      {/* Protected routes - wrapped in layout */}
+      <Route path="/forgot-password" element={<PasswordResetRequest />} />
+      <Route path="/reset-password" element={<PasswordResetConfirm />} />
       <Route
-        path="/"
+        path="/*"
         element={
-          user ? (
+          <RequireAuth>
             <Layout>
               <Routes>
                 <Route index element={<Dashboard />} />
                 <Route path="digests/new" element={<DigestEditor />} />
+                <Route path="digests/assistant" element={<AiAssistant />} />
                 <Route path="digests/edit/:id" element={<DigestEditor />} />
-                <Route path="digests/:id" element={<Dashboard />} />
+                <Route path="digests/:id/deliveries" element={<Deliveries />} />
+                <Route path="deliveries/:id/preview" element={<DeliveryPreview />} />
               </Routes>
             </Layout>
-          ) : (
-            <Navigate to="/login" />
-          )
+          </RequireAuth>
         }
       />
     </Routes>
   )
 }
-
-export default App

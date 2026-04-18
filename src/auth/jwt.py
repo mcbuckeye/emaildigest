@@ -26,5 +26,5 @@ def verify_token(token: str) -> dict:
     try:
         payload = jwt.decode(token, config().secret_key, algorithms=[config().algorithm])
         return payload
-    except JWTError:
-        raise ValueError("Invalid token")
+    except JWTError as exc:
+        raise ValueError("Invalid token") from exc

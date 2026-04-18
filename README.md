@@ -1,107 +1,117 @@
 # EmailDigest
 
-AI-powered email newsletter automation platform.
+AI-powered email newsletter automation. Users sign up, describe what they want in plain English,
+and receive curated email digests on a schedule.
 
-## Quick Start
+## Stack
 
-```bash
-# Start all services
-docker-compose up -d
+- **Backend:** FastAPI (async), SQLAlchemy 2.0 + Alembic, Celery + Celery Beat, Redis
+- **Database:** PostgreSQL 16
+- **AI:** OpenAI (`gpt-4o-mini` by default) with function calling for `validate_rss` + `propose_digest`
+- **Email:** smtp2go via `aiosmtplib`, MIME built with stdlib `EmailMessage`
+- **Frontend:** React 18 + TypeScript (Vite), Vitest + Testing Library
+- **Deploy:** Docker Compose / Dokploy; Cloudflare for DNS/SSL
 
-# Backend runs on http://localhost:8000
-# Frontend runs on http://localhost:3000
-```
-
-## What This Does
-
-- Users sign up at `emaildigest.machomelab.com`
-- Create digests via AI-assisted interface (describe what you want in plain English)
-- Receive curated email digests on their schedule
-
-## Tech Stack
-
-- **Frontend**: React + TypeScript (Vite)
-- **Backend**: Python/FastAPI
-- **Database**: PostgreSQL
-- **Task Queue**: Celery + Redis
-- **Email**: smtp2go
-
-## Development
+## Quick start (local)
 
 ```bash
 # Backend
-pip install -r requirements.txt  # Or install from pyproject.toml
-uvicorn src.main:app --reload
+python3.12 -m venv .venv
+.venv/bin/pip install -e ".[dev]"
+cp .env.example .env  # edit SECRET_KEY, OPENAI_API_KEY, SMTP2GO_API_KEY
+.venv/bin/alembic upgrade head
+.venv/bin/uvicorn src.main:app --reload
 
-# Worker
-celery -A celery_worker worker --loglevel=info
+# Worker + scheduler (new shells)
+.venv/bin/celery -A celery_worker worker --loglevel=info
+.venv/bin/celery -A celery_worker beat --loglevel=info
 
 # Frontend
-cd frontend
-npm install
-npm run dev
+cd frontend && npm install && npm run dev
 ```
 
-## Environment Variables
+## Docker
 
-See `.env.example` for required configuration.
+```bash
+docker-compose up --build -d
+```
 
-## API Endpoints
+Runs Postgres, Redis, migrations, backend, worker, Celery Beat, and frontend.
 
-### Auth
-- `POST /api/auth/signup` - Register
-- `POST /api/auth/login` - Login
-- `GET /api/auth/me` - Get current user
+## Running tests
 
-### Digests
-- `GET /api/digests` - List digests
-- `POST /api/digests` - Create digest
-- `GET /api/digests/{id}` - Get digest
-- `PATCH /api/digests/{id}` - Update digest
-- `DELETE /api/digests/{id}` - Delete digest
+Backend (needs a running Postgres; the test suite creates a throwaway DB per session):
 
-### Health
-- `GET /health` - Basic health check
-- `GET /health/db` - Database connectivity check
+```bash
+TEST_DB_ADMIN_URL=postgresql+asyncpg://emaildigest:emaildigest@localhost:5432/postgres \
+  .venv/bin/pytest --cov=src
+```
 
-## Deployment to Dokploy
+Frontend:
 
-1. **Push to GitHub** (already done):
-   ```bash
-   cd emaildigest
-   git add -A
-   git commit -m "Production-ready deployment"
-   git push
-   ```
+```bash
+cd frontend && npm test && npm run typecheck && npm run build
+```
 
-2. **In Dokploy dashboard**:
-   - Create new app from GitHub repository: `mcbuckeye/emaildigest`
-   - Select branch: `main`
-   - Set environment variables:
-     - `SECRET_KEY` - JWT secret key
-     - `SMTP2GO_API_KEY` - Your smtp2go API key
-     - `LLM_API_KEY` - AI model API key (for future features)
-   - Deploy
+## API
 
-3. **Or use the pre-configured files**:
-   - Copy `.dokploy/docker-compose.prod.yml` and `.dokploy/production.env`
-   - Adjust paths and credentials as needed
-   - Deploy using Dokploy CLI:
-     ```bash
-     dokploy deploy --file .dokploy/docker-compose.prod.yml
-     ```
+Auth
+- `POST /api/auth/signup` — register
+- `POST /api/auth/login` — JSON or OAuth2 form body
+- `GET /api/auth/me` — current user
+- `POST /api/auth/password-reset` — request reset link
+- `POST /api/auth/password-reset/confirm` — consume token + new password
 
-4. **Custom domain**:
-   - Point CNAME `emaildigest.machomelab.com` to your Dokploy instance
-   - Configure SSL certificate in Dokploy
+Digests
+- `GET /api/digests` — list
+- `POST /api/digests` — create (accepts `sources: [{source_type, url}]`)
+- `GET /api/digests/{id}` — read
+- `PATCH /api/digests/{id}` — update
+- `DELETE /api/digests/{id}`
+- `POST /api/digests/{id}/pause` / `resume` / `resend`
+- `GET /api/digests/{id}/deliveries` — delivery history
+- `GET /api/deliveries/{id}/preview` — rendered HTML email
+
+AI
+- `POST /api/ai/chat` — conversational digest builder with tool calls
+
+Health
+- `GET /health` — liveness
+- `GET /health/ready` — readiness (DB reachable)
+
+## Environment
+
+See `.env.example`. Required in production:
+- `SECRET_KEY` (JWT signing; app refuses to start with the default in `APP_ENV=production`)
+- `OPENAI_API_KEY`
+- `SMTP2GO_API_KEY`
+- `DATABASE_URL`, `REDIS_URL`
+- `CORS_ORIGINS` (comma-separated)
+- `APP_BASE_URL` (used in reset-password links)
 
 ## Architecture
 
 ```
-Frontend (React) ←→ Backend (FastAPI) ←→ Celery Workers
-                             ↓
-                      PostgreSQL + Redis
+React SPA
+   │
+   ▼
+FastAPI  ──►  PostgreSQL
+   │
+   ├─► Redis (Celery broker + result backend)
+   │       │
+   │       ├─► Celery Worker  (digest generation)
+   │       └─► Celery Beat    (scan_due_digests every minute)
+   │
+   └─► OpenAI (chat + summarization)
 ```
+
+## Security notes
+
+- Rate limits on signup, login, password-reset, and AI chat (configurable via env).
+- SSRF protection in source fetchers (blocks private/link-local/loopback IPs).
+- HTML sanitization via `bleach` before embedding in emails.
+- CORS origins locked to `CORS_ORIGINS` (no `*` in production).
+- `strict-transport-security`, `x-content-type-options`, `x-frame-options`, `referrer-policy` headers.
 
 ## License
 
