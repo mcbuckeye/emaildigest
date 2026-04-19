@@ -6,6 +6,9 @@ import Layout from './components/Layout'
 import AiAssistant from './pages/AiAssistant'
 import Deliveries, { DeliveryPreview } from './pages/Deliveries'
 import { PasswordResetRequest, PasswordResetConfirm } from './pages/PasswordReset'
+import VerifyEmail from './pages/VerifyEmail'
+import Unsubscribe from './pages/Unsubscribe'
+import Settings from './pages/Settings'
 import { useAuth } from './contexts/AuthContext'
 
 function RequireAuth({ children }: { children: JSX.Element }) {
@@ -22,6 +25,8 @@ export default function App() {
       <Route path="/signup" element={<Auth mode="signup" />} />
       <Route path="/forgot-password" element={<PasswordResetRequest />} />
       <Route path="/reset-password" element={<PasswordResetConfirm />} />
+      <Route path="/verify-email" element={<VerifyEmail />} />
+      <Route path="/unsubscribe" element={<Unsubscribe />} />
       <Route
         path="/*"
         element={
@@ -34,6 +39,7 @@ export default function App() {
                 <Route path="digests/edit/:id" element={<DigestEditor />} />
                 <Route path="digests/:id/deliveries" element={<Deliveries />} />
                 <Route path="deliveries/:id/preview" element={<DeliveryPreview />} />
+                <Route path="settings" element={<Settings />} />
               </Routes>
             </Layout>
           </RequireAuth>

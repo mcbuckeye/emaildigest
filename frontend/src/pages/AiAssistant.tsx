@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api, type ChatResponse } from '../api'
+import { chatStream, type ChatResponse } from '../api'
 
 interface ChatLine {
   role: 'user' | 'assistant'
@@ -18,19 +18,41 @@ export default function AiAssistant() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [proposal, setProposal] = useState<ChatResponse['proposed_digest']>(null)
+  const [toolTrace, setToolTrace] = useState<string[]>([])
   const navigate = useNavigate()
 
   const send = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!input.trim()) return
     const message = input
-    setLines((ls) => [...ls, { role: 'user', content: message }])
+    setLines((ls) => [...ls, { role: 'user', content: message }, { role: 'assistant', content: '' }])
     setInput('')
     setLoading(true)
+    setToolTrace([])
+
+    let assistantText = ''
     try {
-      const res = await api.chat(message)
-      setLines((ls) => [...ls, { role: 'assistant', content: res.reply }])
-      if (res.proposed_digest) setProposal(res.proposed_digest)
+      for await (const ev of chatStream(message)) {
+        if (ev.type === 'token') {
+          assistantText += ev.content
+          setLines((ls) => {
+            const copy = [...ls]
+            copy[copy.length - 1] = { role: 'assistant', content: assistantText }
+            return copy
+          })
+        } else if (ev.type === 'tool') {
+          setToolTrace((t) => [...t, `${ev.name}(${JSON.stringify(ev.args)})`])
+        } else if (ev.type === 'final') {
+          if (ev.proposed_digest) setProposal(ev.proposed_digest)
+          if (!assistantText && ev.reply) {
+            setLines((ls) => {
+              const copy = [...ls]
+              copy[copy.length - 1] = { role: 'assistant', content: ev.reply }
+              return copy
+            })
+          }
+        }
+      }
     } catch (err) {
       setLines((ls) => [...ls, { role: 'assistant', content: (err as Error).message }])
     } finally {
@@ -76,6 +98,7 @@ export default function AiAssistant() {
                 padding: '8px 12px',
                 borderRadius: 12,
                 maxWidth: '80%',
+                whiteSpace: 'pre-wrap',
               }}
             >
               {l.content}
@@ -83,6 +106,15 @@ export default function AiAssistant() {
           </div>
         ))}
       </div>
+
+      {toolTrace.length > 0 && (
+        <details>
+          <summary style={{ fontSize: 12, color: '#666' }}>Tool activity</summary>
+          <ul style={{ fontSize: 12 }}>
+            {toolTrace.map((t, i) => <li key={i}><code>{t}</code></li>)}
+          </ul>
+        </details>
+      )}
 
       <form onSubmit={send} style={{ display: 'flex', gap: 8 }}>
         <input

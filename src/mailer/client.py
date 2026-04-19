@@ -56,3 +56,29 @@ async def send_password_reset_email(to_email: str, token: str) -> None:
     )
 
     await send_email_message(msg)
+
+
+async def send_email_verification(to_email: str, token: str) -> None:
+    """Send an email-confirmation link."""
+    settings = config()
+    verify_url = f"{settings.app_base_url.rstrip('/')}/verify-email?token={token}"
+
+    msg = EmailMessage()
+    msg["From"] = f"{settings.smtp2go_from_name} <{settings.smtp2go_from_email}>"
+    msg["To"] = to_email
+    msg["Subject"] = f"{settings.app_name}: confirm your email"
+    msg.set_content(
+        "Welcome to EmailDigest.\n\n"
+        f"Please confirm your email by opening this link:\n{verify_url}\n\n"
+        "If you didn't create this account, ignore this email."
+    )
+    msg.add_alternative(
+        f"""
+        <html><body>
+          <p>Welcome to {settings.app_name}.</p>
+          <p><a href="{verify_url}">Confirm your email</a></p>
+        </body></html>
+        """,
+        subtype="html",
+    )
+    await send_email_message(msg)

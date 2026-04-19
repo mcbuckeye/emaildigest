@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o-mini"
     openai_base_url: str | None = None
 
+    # Observability
+    sentry_dsn: str = ""
+    sentry_traces_sample_rate: float = 0.0
+
     @property
     def celery_broker(self) -> str:
         return self.celery_broker_url or self.redis_url

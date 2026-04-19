@@ -71,6 +71,11 @@ export default function Dashboard() {
                 <span className={`status-badge status-${d.status}`}>{d.status}</span>
               </div>
               {d.description && <p className="text-muted">{d.description}</p>}
+              {d.sources.some((s) => s.health === 'broken' || s.health === 'degraded') && (
+                <p style={{ fontSize: 12, color: '#b45309', margin: '4px 0' }}>
+                  ⚠ One or more sources are unhealthy — check the editor.
+                </p>
+              )}
               <p style={{ fontSize: 13, color: '#666' }}>
                 <strong>Schedule:</strong> {d.frequency_cron} <br />
                 <strong>To:</strong> {d.recipient_email}

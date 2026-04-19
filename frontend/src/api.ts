@@ -7,6 +7,9 @@ export interface Source {
   id?: number
   source_type: 'rss' | 'url'
   url: string
+  health?: 'healthy' | 'degraded' | 'broken'
+  consecutive_failures?: number
+  last_error?: string | null
 }
 
 export interface Digest {
@@ -23,6 +26,13 @@ export interface Digest {
   updated_at: string
 }
 
+export interface Recipient {
+  id: number
+  email: string
+  unsubscribed_at: string | null
+  unsubscribe_token: string
+}
+
 export interface Delivery {
   id: number
   digest_id: number
@@ -32,6 +42,8 @@ export interface Delivery {
   subject: string | null
   error_message: string | null
   item_count: number
+  open_count: number
+  click_count: number
 }
 
 export interface ChatResponse {
@@ -43,6 +55,16 @@ export interface ChatResponse {
     sources: Source[]
   } | null
 }
+
+export type StreamEvent =
+  | { type: 'token'; content: string }
+  | { type: 'tool'; name: string; args: unknown; result: unknown }
+  | {
+      type: 'final'
+      reply: string
+      tool_calls: Array<{ tool: string; args: unknown; result: unknown }>
+      proposed_digest: ChatResponse['proposed_digest']
+    }
 
 function authHeaders(): HeadersInit {
   const token = localStorage.getItem('token')
@@ -72,6 +94,41 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.text()) as unknown as T
 }
 
+export async function* chatStream(message: string): AsyncGenerator<StreamEvent> {
+  const res = await fetch('/api/ai/chat/stream', {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ message }),
+  })
+  if (!res.ok || !res.body) {
+    throw new Error('stream failed')
+  }
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) return
+    buffer += decoder.decode(value, { stream: true })
+    for (;;) {
+      const ix = buffer.indexOf('\n\n')
+      if (ix === -1) break
+      const frame = buffer.slice(0, ix)
+      buffer = buffer.slice(ix + 2)
+      for (const line of frame.split('\n')) {
+        if (!line.startsWith('data:')) continue
+        const data = line.slice(5).trim()
+        if (!data) continue
+        try {
+          yield JSON.parse(data) as StreamEvent
+        } catch {
+          /* skip */
+        }
+      }
+    }
+  }
+}
+
 export const api = {
   signup: (email: string, password: string) =>
     request<{ id: number; email: string; token: string }>('/api/auth/signup', {
@@ -94,6 +151,25 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ token, new_password: newPassword }),
     }),
+  verifyEmail: (token: string) =>
+    request<{ detail: string }>('/api/auth/verify-email', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    }),
+  resendVerification: () =>
+    request<{ detail: string }>('/api/auth/resend-verification', { method: 'POST' }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ detail: string }>('/api/user/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+    }),
+  changeEmail: (newEmail: string, currentPassword: string) =>
+    request<{ detail: string }>('/api/user/change-email', {
+      method: 'POST',
+      body: JSON.stringify({ new_email: newEmail, current_password: currentPassword }),
+    }),
+  deleteAccount: () =>
+    request<void>('/api/user?confirm=DELETE', { method: 'DELETE' }),
 
   listDigests: () => request<Digest[]>('/api/digests'),
   getDigest: (id: number) => request<Digest>(`/api/digests/${id}`),
@@ -120,6 +196,18 @@ export const api = {
     request<{ id: number; status: string }>(`/api/digests/${id}/resume`, { method: 'POST' }),
   resendDigest: (id: number) =>
     request<{ status: string; digest_id: number }>(`/api/digests/${id}/resend`, { method: 'POST' }),
+
+  listRecipients: (digestId: number) =>
+    request<Recipient[]>(`/api/digests/${digestId}/recipients`),
+  addRecipient: (digestId: number, email: string) =>
+    request<Recipient>(`/api/digests/${digestId}/recipients`, {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+  removeRecipient: (digestId: number, recipientId: number) =>
+    request<void>(`/api/digests/${digestId}/recipients/${recipientId}`, { method: 'DELETE' }),
+  unsubscribe: (token: string) =>
+    request<{ detail: string }>(`/api/unsubscribe/${token}`, { method: 'POST' }),
 
   listDeliveries: (digestId: number) =>
     request<Delivery[]>(`/api/digests/${digestId}/deliveries`),

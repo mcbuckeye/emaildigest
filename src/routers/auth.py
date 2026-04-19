@@ -16,8 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.auth import create_access_token, verify_token
 from src.config import config
 from src.database import get_db
-from src.mailer.client import send_password_reset_email
-from src.models import PasswordResetToken, User
+from src.mailer.client import send_email_verification, send_password_reset_email
+from src.models import EmailVerificationToken, PasswordResetToken, User
 from src.rate_limit import limiter
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -54,6 +54,10 @@ class PasswordResetRequestIn(BaseModel):
 class PasswordResetConfirmIn(BaseModel):
     token: str
     new_password: str = Field(min_length=8, max_length=128)
+
+
+class VerifyEmailIn(BaseModel):
+    token: str
 
 
 async def get_current_user(
@@ -116,7 +120,53 @@ async def signup(
     await db.commit()
     await db.refresh(user)
 
+    await _issue_verification(user, db)
+
     return SignupOut(id=user.id, email=user.email, token=_issue_access_token(user))
+
+
+async def _issue_verification(user: User, db: AsyncSession) -> None:
+    raw = secrets.token_urlsafe(32)
+    db.add(
+        EmailVerificationToken(
+            user_id=user.id,
+            token_hash=_hash_token(raw),
+            expires_at=datetime.utcnow() + timedelta(days=2),
+        )
+    )
+    await db.commit()
+    await send_email_verification(user.email, raw)
+
+
+@router.post("/verify-email")
+async def verify_email(
+    payload: VerifyEmailIn,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    token_hash = _hash_token(payload.token)
+    row = (
+        await db.execute(select(EmailVerificationToken).where(EmailVerificationToken.token_hash == token_hash))
+    ).scalar_one_or_none()
+    if row is None or row.used_at is not None or row.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired token")
+    user = await db.get(User, row.user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token")
+    user.email_verified_at = datetime.utcnow()
+    row.used_at = datetime.utcnow()
+    await db.commit()
+    return {"detail": "Email verified"}
+
+
+@router.post("/resend-verification", status_code=status.HTTP_202_ACCEPTED)
+async def resend_verification(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    if current_user.email_verified_at is not None:
+        return {"detail": "Already verified"}
+    await _issue_verification(current_user, db)
+    return {"detail": "Verification sent"}
 
 
 @router.post("/login", response_model=TokenOut)

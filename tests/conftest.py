@@ -59,7 +59,7 @@ async def _configured_env(_test_database_url: str) -> AsyncIterator[str]:
     os.environ["SECRET_KEY"] = "test-secret-key-not-for-production"
     os.environ["APP_ENV"] = "test"
     os.environ["OPENAI_API_KEY"] = "test-openai-key"
-    os.environ["SMTP2GO_API_KEY"] = "test-smtp-key"
+    os.environ["SMTP2GO_API_KEY"] = ""
     os.environ["REDIS_URL"] = "redis://localhost:6379/15"
     os.environ["RATE_LIMIT_SIGNUP"] = "1000/minute"
     os.environ["RATE_LIMIT_LOGIN"] = "1000/minute"
